@@ -9,39 +9,86 @@
 
 void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
 {
-    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pId);
-    if (!hProcess)
-        return;
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION, FALSE, pId);
 
-    HMODULE hMod;
-    DWORD cbNeeded;
-    TCHAR procName[MAX_PATH] = _T("");
-
-    if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
+    if (hProcess != NULL)
     {
-        if (GetModuleBaseName(hProcess, hMod, procName, MAX_PATH))
+        HMODULE hMod;
+        DWORD cbNeeded;
+        TCHAR procName[MAX_PATH] = _T("<Unknown>");
+
+        if (EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded))
         {
-            if (lookForMyProcess(procName))
+            if (GetModuleBaseName(hProcess, hMod, procName, sizeof(procName) / sizeof(TCHAR)))
             {
-                MODULEINFO modInfo;
-                GetModuleInformation(hProcess, hMod, &modInfo, sizeof(modInfo));
-                uintptr_t base = (uintptr_t)modInfo.lpBaseOfDll;
-
-                uintptr_t addr = base + GAME_POINTER_OFFSET;
-                uintptr_t ptr1 = 0, ptr2 = 0;
-                SIZE_T bytesRead;
-
-                if (ReadProcessMemory(hProcess, (void *)addr, &ptr1, sizeof(ptr1), &bytesRead))
+                if (lookForMyProcess(procName))
                 {
-                    if (ReadProcessMemory(hProcess, (void *)ptr1, &ptr2, sizeof(ptr2), &bytesRead))
+                    MODULEINFO modInfo = {0};
+
+                    if (GetModuleInformation(hProcess, hMod, &modInfo, sizeof(modInfo)))
                     {
-                        uintptr_t healthAddr = ptr2 + PLAYER_HEALTH_OFFSET;
-                        WriteProcessMemory(hProcess, (void *)healthAddr, &newHealthValueFromInput, sizeof(int), nullptr);
+                        uintptr_t baseAddress = reinterpret_cast<uintptr_t>(modInfo.lpBaseOfDll);
+                        uintptr_t pointerAddress = baseAddress + GAME_POINTER_OFFSET;
+                        uintptr_t yellPointer = baseAddress + YELL_FUNCTION_OFFSET;
+                        uintptr_t speakPointer = baseAddress + SPEAK_FUNCTION_OFFSET;
+
+                        uintptr_t pointer1 = 0;
+                        SIZE_T bytesRead = 0;
+
+                        // Step 1: Read pointer1 from base + GAME_POINTER_OFFSET
+                        if (ReadProcessMemory(hProcess, (LPCVOID)pointerAddress, &pointer1, sizeof(pointer1), &bytesRead))
+                        {
+                            std::cout << "[+] Pointer 1: 0x" << std::hex << pointer1 << std::endl;
+
+                            uintptr_t pointer2 = 0;
+
+                            // Step 2: Read pointer2 from pointer1
+                            if (ReadProcessMemory(hProcess, (LPCVOID)pointer1, &pointer2, sizeof(pointer2), &bytesRead))
+                            {
+                                std::cout << "[+] Pointer 2 (Player Object): 0x" << std::hex << pointer2 << std::endl;
+
+                                int playerHealth = 0;
+                                uintptr_t healthAddr = pointer2 + PLAYER_HEALTH_OFFSET;
+
+                                // Step 3: Read player health
+                                if (ReadProcessMemory(hProcess, (LPCVOID)healthAddr, &playerHealth, sizeof(playerHealth), &bytesRead))
+                                {
+                                    std::cout << "[+] Player Health: " << std::dec << playerHealth << std::endl;
+
+                                    int newHealthValue = newHealthValueFromInput;
+                                    SIZE_T bytesWritten = 0;
+
+                                    if (WriteProcessMemory(hProcess, (LPVOID)healthAddr, &newHealthValue, sizeof(newHealthValue), &bytesWritten))
+                                    {
+                                        std::cout << "[+] Managed to overwrite Player Health, new value is: " << std::dec << newHealthValue << std::endl;
+                                    }
+                                    else
+                                    {
+                                        std::cerr << "[-] Failed to overwrite Player Health. Error: " << GetLastError() << std::endl;
+                                    }
+                                }
+                                else
+                                {
+                                    std::cerr << "[-] Failed to read player health. Error: " << GetLastError() << std::endl;
+                                }
+                            }
+                            else
+                            {
+                                std::cerr << "[-] Failed to read pointer2. Error: " << GetLastError() << std::endl;
+                            }
+                        }
+                        else
+                        {
+                            std::cerr << "[-] Failed to read pointer1. Error: " << GetLastError() << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "[-] Failed to get module information. Error: " << GetLastError() << std::endl;
                     }
                 }
             }
         }
     }
-
     CloseHandle(hProcess);
 }
