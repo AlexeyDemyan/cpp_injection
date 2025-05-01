@@ -29,8 +29,8 @@ void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
                     {
                         uintptr_t baseAddress = reinterpret_cast<uintptr_t>(modInfo.lpBaseOfDll);
                         uintptr_t pointerAddress = baseAddress + GAME_POINTER_OFFSET;
-                        uintptr_t yellPointer = baseAddress + YELL_FUNCTION_OFFSET;
-                        uintptr_t speakPointer = baseAddress + SPEAK_FUNCTION_OFFSET;
+                        DWORD64 yellPointer = baseAddress + YELL_FUNCTION_OFFSET;
+                        DWORD64 speakPointer = baseAddress + SPEAK_FUNCTION_OFFSET;
 
                         uintptr_t pointer1 = 0;
                         SIZE_T bytesRead = 0;
@@ -61,6 +61,32 @@ void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
                                     if (WriteProcessMemory(hProcess, (LPVOID)healthAddr, &newHealthValue, sizeof(newHealthValue), &bytesWritten))
                                     {
                                         std::cout << "[+] Managed to overwrite Player Health, new value is: " << std::dec << newHealthValue << std::endl;
+
+
+
+                                        HANDLE hRemoteThread = CreateRemoteThread(
+                                            hProcess,
+                                            NULL,
+                                            0,
+                                            (LPTHREAD_START_ROUTINE)yellPointer, // Function pointer in remote process
+                                            NULL,                                // No parameters
+                                            0,
+                                            NULL);
+                                        
+                                        if (hRemoteThread == NULL)
+                                        {
+                                            std::cerr << "[-] Failed to create remote thread. Error: " << GetLastError() << std::endl;
+                                        }
+                                        else
+                                        {
+                                            std::cout << "[+] Remote thread created to call yell()!" << std::endl;
+                                            WaitForSingleObject(hRemoteThread, INFINITE);
+                                            CloseHandle(hRemoteThread);
+                                        }
+
+
+
+
                                     }
                                     else
                                     {
