@@ -2,8 +2,13 @@
 #include <windows.h>
 #include <iostream>
 
-int main() {
-    const wchar_t* pipeName = L"\\\\.\\pipe\\TestPipe";
+int main()
+{
+    ListProcesses(565);
+
+    const wchar_t *pipeName = L"\\\\.\\pipe\\TestPipe";
+
+    std::wcout << L"[+] Creating named pipe: " << pipeName << std::endl;
 
     HANDLE hPipe = CreateNamedPipeW(
         pipeName,
@@ -11,28 +16,44 @@ int main() {
         PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
         1, 1024, 1024, 0, NULL);
 
-    if (hPipe == INVALID_HANDLE_VALUE) {
+    if (hPipe == INVALID_HANDLE_VALUE)
+    {
         std::wcerr << L"Failed to create pipe. Error: " << GetLastError() << std::endl;
         return 1;
     }
 
-    std::wcout << L"Waiting for client to connect...\n";
-    if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED) {
+    std::wcout << L"[+] Waiting for client to connect..." << std::endl;
+
+    if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED)
+    {
+        std::wcout << L"[+] Client connected!" << std::endl;
+
         char buffer[128];
         DWORD bytesRead;
 
-        while (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
+        while (true)
+        {
+            BOOL result = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
+            if (!result || bytesRead == 0)
+                break;
+
             buffer[bytesRead] = '\0';
-            try {
-                int newVal = std::stoi(std::string(buffer));
-                ListProcesses(newVal);
-            } catch (...) {
-                std::cerr << "Invalid input\n";
+            std::cout << "[Client]" << buffer << std::endl;
+
+            try
+            {
+                int receivedNumber = std::stoi(std::string(buffer));
+                ListProcesses(receivedNumber);
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "[-] Failed to convert input to number: " << e.what() << std::endl;
             }
 
-            const char* reply = "OK\n";
+            // echo back a response
+            const char *response = "Acknowledged";
             DWORD bytesWritten;
-            WriteFile(hPipe, reply, strlen(reply), &bytesWritten, NULL);
+            WriteFile(hPipe, response, strlen(response), &bytesWritten, NULL);
         }
     }
 
