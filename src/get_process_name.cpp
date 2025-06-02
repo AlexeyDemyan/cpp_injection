@@ -1,5 +1,6 @@
 #include "get_process_name.h"
 #include "look_for_process.h"
+#include "enable_debug_privilege.h"
 #include "memory_offsets.h"
 #include <windows.h>
 #include <psapi.h>
@@ -9,6 +10,12 @@
 
 void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
 {
+    if (!EnableDebugPrivilege())
+    {
+        std::cerr << "Failed to enable SE_DEBUG_NAME privilege." << std::endl;
+        return;
+    }
+
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION, FALSE, pId);
 
     if (hProcess != NULL)
@@ -21,6 +28,9 @@ void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
         {
             if (GetModuleBaseName(hProcess, hMod, procName, sizeof(procName) / sizeof(TCHAR)))
             {
+                std::cout << "Here's the process name from the buffer: " << procName << '\n';
+                std::cout << "And here's the pID: " << pId << '\n';
+
                 if (lookForMyProcess(procName))
                 {
                     MODULEINFO modInfo = {0};
@@ -62,31 +72,25 @@ void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
                                     {
                                         std::cout << "[+] Managed to overwrite Player Health, new value is: " << std::dec << newHealthValue << std::endl;
 
+                                        // HANDLE hRemoteThread = CreateRemoteThread(
+                                        //     hProcess,
+                                        //     NULL,
+                                        //     0,
+                                        //     (LPTHREAD_START_ROUTINE)yellPointer, // Function pointer in remote process
+                                        //     NULL,                                // No parameters
+                                        //     0,
+                                        //     NULL);
 
-
-                                        HANDLE hRemoteThread = CreateRemoteThread(
-                                            hProcess,
-                                            NULL,
-                                            0,
-                                            (LPTHREAD_START_ROUTINE)yellPointer, // Function pointer in remote process
-                                            NULL,                                // No parameters
-                                            0,
-                                            NULL);
-                                        
-                                        if (hRemoteThread == NULL)
-                                        {
-                                            std::cerr << "[-] Failed to create remote thread. Error: " << GetLastError() << std::endl;
-                                        }
-                                        else
-                                        {
-                                            std::cout << "[+] Remote thread created to call yell()!" << std::endl;
-                                            WaitForSingleObject(hRemoteThread, INFINITE);
-                                            CloseHandle(hRemoteThread);
-                                        }
-
-
-
-
+                                        // if (hRemoteThread == NULL)
+                                        // {
+                                        //     std::cerr << "[-] Failed to create remote thread. Error: " << GetLastError() << std::endl;
+                                        // }
+                                        // else
+                                        // {
+                                        //     std::cout << "[+] Remote thread created to call yell()!" << std::endl;
+                                        //     WaitForSingleObject(hRemoteThread, INFINITE);
+                                        //     CloseHandle(hRemoteThread);
+                                        // }
                                     }
                                     else
                                     {
