@@ -12,6 +12,7 @@
         "src/look_for_process.cpp",
         "src/get_process_name.cpp",
         "src/list_processes.cpp",
+        "src/enable_debug_privilege.cpp",
         "-Iinclude",
         "-o",
         "${workspaceFolder}\\build\\main.exe"

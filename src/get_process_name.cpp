@@ -28,11 +28,12 @@ void GetProcessNameById(DWORD pId, int newHealthValueFromInput)
         {
             if (GetModuleBaseName(hProcess, hMod, procName, sizeof(procName) / sizeof(TCHAR)))
             {
-                std::cout << "Here's the process name from the buffer: " << procName << '\n';
-                std::cout << "And here's the pID: " << pId << '\n';
+                // std::cout << "Here's the process name from the buffer: " << procName << '\n';
+                // std::cout << "And here's the pID: " << pId << '\n';
 
                 if (lookForMyProcess(procName))
                 {
+                    std::cin.get();
                     MODULEINFO modInfo = {0};
 
                     if (GetModuleInformation(hProcess, hMod, &modInfo, sizeof(modInfo)))
